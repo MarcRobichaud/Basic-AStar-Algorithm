@@ -134,10 +134,17 @@ public class AStar : MonoBehaviour
 
     public void AddNeighbourToOpenList(Vector2Int neighbourPos, Tile lastTile)
     {
-        if (!IsAlreadyInList(neighbourPos) && IsCellWalkable(neighbourPos))
+        bool isAlreadyInList = IsAlreadyInList(neighbourPos);
+
+        if (!isAlreadyInList && IsCellWalkable(neighbourPos))
         {
             Tile tile = new Tile(neighbourPos, lastTile, Tile.GetH(neighbourPos, destinationPosition));
             openList.Add(neighbourPos, tile);
+        }
+        else if (openList.ContainsKey(neighbourPos) && openList[neighbourPos].lastTile.G > lastTile.G)
+        {
+            openList[neighbourPos].lastTile = lastTile;
+            openList[neighbourPos].G = lastTile.G + 1;
         }
     }
 
