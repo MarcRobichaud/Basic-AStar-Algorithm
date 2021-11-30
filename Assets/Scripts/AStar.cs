@@ -1,8 +1,6 @@
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.Tilemaps;
 
 public enum DirectionToCheck
 {
@@ -14,96 +12,70 @@ public enum DirectionToCheck
 
 public class AStar : MonoBehaviour
 {
-    public static Vector2Int NeighbourPos(DirectionToCheck direction, Vector2Int pos) => direction switch
+    Links links;
+
+    private void Awake()
     {
-        DirectionToCheck.Up => pos + Vector2Int.up,
-        DirectionToCheck.Right => pos + Vector2Int.right,
-        DirectionToCheck.Down => pos + Vector2Int.down,
-        DirectionToCheck.Left => pos + Vector2Int.left,
+        links = FindObjectOfType<Links>();
+    }
+
+    public static Vector3Int NeighbourPos(DirectionToCheck direction, Vector3Int pos) => direction switch
+    {
+        DirectionToCheck.Up => pos + Vector3Int.up,
+        DirectionToCheck.Right => pos + Vector3Int.right,
+        DirectionToCheck.Down => pos + Vector3Int.down,
+        DirectionToCheck.Left => pos + Vector3Int.left,
         _ => throw new ArgumentOutOfRangeException(nameof(direction), $"Not expected direction value: {direction}"),
     };
 
-    public static Vector2Int MaxVector2Int = new Vector2Int(int.MaxValue, int.MaxValue);
-    public static Vector3Int Vect3IntToVect2(Vector2Int vect3)
+    public static Vector3Int MaxVector3Int = new Vector3Int(int.MaxValue, int.MaxValue, int.MaxValue);
+
+    Dictionary<Vector3Int, Tile> closedList = new Dictionary<Vector3Int, Tile>();
+    Dictionary<Vector3Int, Tile> openList = new Dictionary<Vector3Int, Tile>();
+
+    bool IsAlreadyInList(Vector3Int pos) => openList.ContainsKey(pos) || closedList.ContainsKey(pos);
+    bool IsCellWalkable(Vector3Int pos) => links.waterTileMap.GetTile(pos) == null && links.boundsTileMap.GetTile(pos) == null;
+    Vector3Int SmallestFPosition()
     {
-        Vector3Int vect = new Vector3Int
+        Vector3Int smallestF = MaxVector3Int;
+        foreach (Vector3Int pos in openList.Keys)
         {
-            x = vect3.x,
-            y = vect3.y,
-            z = 0
-        };
-        return vect;
-    }
-
-    public Tilemap NonWalkableTile;
-    public Tilemap DrawableTile;
-
-    public TileBase pathTile;
-    public TileBase closedListTile;
-
-    Dictionary<Vector2Int, Tile> closedList = new Dictionary<Vector2Int, Tile>();
-    Dictionary<Vector2Int, Tile> openList = new Dictionary<Vector2Int, Tile>();
-
-    bool IsAlreadyInList(Vector2Int pos) => openList.ContainsKey(pos) || closedList.ContainsKey(pos);
-    bool IsCellWalkable(Vector2 pos) => NonWalkableTile.GetTile(NonWalkableTile.WorldToCell(pos)) == null;
-    Vector2Int SmallestFPosition()
-    {
-        Vector2Int smallestF = MaxVector2Int;
-        foreach (Vector2Int pos in openList.Keys)
-        {
-            if (smallestF == MaxVector2Int || openList[pos].F < openList[smallestF].F)
+            if (smallestF == MaxVector3Int || openList[pos].F < openList[smallestF].F)
                 smallestF = pos;
         }
         return smallestF;
     }
 
-    Vector2Int startingPosition = MaxVector2Int;
-    Vector2Int destinationPosition = MaxVector2Int;
-    Vector2Int currentPosition;
+    Vector3Int startingPosition = MaxVector3Int;
+    Vector3Int destinationPosition = MaxVector3Int;
+    Vector3Int currentPosition;
 
-    private void Update()
+    public List<Vector3> FindPath(Vector3Int startingPos, Vector3Int destinationPos)
     {
-        if (Input.GetMouseButtonDown(0))
-        {
-            Vector3 pos = Camera.main.ScreenToWorldPoint(Input.mousePosition);
-            Vector3Int vect3 = NonWalkableTile.WorldToCell(pos);
-            Vector2Int vect2 = new Vector2Int
-            {
-                x = vect3.x,
-                y = vect3.y
-            };
-            if (startingPosition == MaxVector2Int)
-            {
-                startingPosition = vect2;
-            }
-            else if (destinationPosition == MaxVector2Int)
-            {
-                destinationPosition = vect2;
-                StartCoroutine(FindPath());
-            }
-        }
-    }
-
-    IEnumerator FindPath()
-    {
+        startingPosition = startingPos;
+        destinationPosition = destinationPos;
         Init();
         AddNeighboursToOpenList();
         while (openList.Count > 0 && currentPosition != destinationPosition)
         {
             FindSmallestF();
             AddNeighboursToOpenList();
-            yield return new WaitForSeconds(0.1f);
         }
 
+        List<Vector3> path = new List<Vector3>();
         if (currentPosition == destinationPosition)
         {
+            Vector3 vect3 = links.backgroundTilemap.GetCellCenterWorld(closedList[currentPosition].position);
+            path.Add(vect3);
             while (closedList[currentPosition].lastTile != null)
             {
-                DrawableTile.SetTile(Vect3IntToVect2(currentPosition), pathTile);
                 currentPosition = closedList[currentPosition].lastTile.position;
+                vect3 = links.backgroundTilemap.GetCellCenterWorld(closedList[currentPosition].position);
+                path.Add(vect3);
             }
         }
         ResetPathFinding();
+        return path;
     }
 
     private void Init()
@@ -115,11 +87,10 @@ public class AStar : MonoBehaviour
 
     private void FindSmallestF()
     {
-        Vector2Int smallestFPos = SmallestFPosition();
+        Vector3Int smallestFPos = SmallestFPosition();
         closedList.Add(smallestFPos, openList[smallestFPos]);
         openList.Remove(smallestFPos);
         currentPosition = smallestFPos;
-        DrawableTile.SetTile(Vect3IntToVect2(smallestFPos), closedListTile);
     }
 
     public void AddNeighboursToOpenList()
@@ -132,7 +103,7 @@ public class AStar : MonoBehaviour
         }
     }
 
-    public void AddNeighbourToOpenList(Vector2Int neighbourPos, Tile lastTile)
+    public void AddNeighbourToOpenList(Vector3Int neighbourPos, Tile lastTile)
     {
         bool isAlreadyInList = IsAlreadyInList(neighbourPos);
 
@@ -150,8 +121,8 @@ public class AStar : MonoBehaviour
 
     public void ResetPathFinding()
     {
-        startingPosition = MaxVector2Int;
-        destinationPosition = MaxVector2Int;
+        startingPosition = MaxVector3Int;
+        destinationPosition = MaxVector3Int;
         openList.Clear();
         closedList.Clear();
     }
@@ -159,13 +130,13 @@ public class AStar : MonoBehaviour
 
 public class Tile
 {
-    public Vector2Int position;
+    public Vector3Int position;
     public Tile lastTile;
     public int H;
     public int G;
     public int F => H + G;
 
-    public static int GetH(Vector2Int pos, Vector2Int dest) 
+    public static int GetH(Vector3Int pos, Vector3Int dest) 
     {
         int deltaX = Math.Abs(pos.x - dest.x);
         int deltaY = Math.Abs(pos.y - dest.y);
@@ -173,7 +144,7 @@ public class Tile
         return deltaX + deltaY;
     }
 
-    public Tile(Vector2Int pos, Tile _lastTile, int _H)
+    public Tile(Vector3Int pos, Tile _lastTile, int _H)
     {
         position = pos;
         lastTile = _lastTile;

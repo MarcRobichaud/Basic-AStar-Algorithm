@@ -8,11 +8,11 @@ TagManager:
   - Default
   - TransparentFX
   - Ignore Raycast
-  - 
+  - MapBounds
   - Water
   - UI
-  - 
-  - 
+  - Obstacle
+  - Player
   - 
   - 
   - 
@@ -49,4 +49,13 @@ TagManager:
     locked: 0
   - name: Path
     uniqueID: 2107198807
+    locked: 0
+  - name: Bounds
+    uniqueID: 1696838813
+    locked: 0
+  - name: Enemy
+    uniqueID: 3500061643
+    locked: 0
+  - name: Player
+    uniqueID: 4242549385
     locked: 0
