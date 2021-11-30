@@ -6,41 +6,74 @@ public delegate void Action();
 
 public class StateMachine<T> where T : Enum
 {
+    public T initialState;
     public T currentState;
-    public T endState;
+    public HashSet<T> endStates;
 
-    public Dictionary<T, List<Transition<T>>> Transitions { get; private set;}
+    public Dictionary<T, HashSet<Transition<T>>> Transitions { get; private set; }
     public Dictionary<T, Action> Actions { get; private set; }
+    public HashSet<Transition<T>> AnyStateTransitions { get; private set; }
 
-    public StateMachine(T initialState)
+    public bool EndState => endStates.Contains(currentState);
+    public bool looping = false;
+
+    private bool TransitionCondition(Transition<T> transition) => transition.TransitionCondition != null && transition.TransitionCondition.Invoke();
+
+    public StateMachine(T _initialState)
     {
-        Transitions = new Dictionary<T, List<Transition<T>>>();
-        Actions = new Dictionary<T, Action>();
-        currentState = initialState;
+        InitCollections();
+
+        initialState = _initialState;
+
+        Restart();
     }
 
-    public StateMachine(T _initialState, T _endState)
+    public StateMachine(T _initialState, HashSet<T> _endState)
     {
-        Transitions = new Dictionary<T, List<Transition<T>>>();
-        Actions = new Dictionary<T, Action>();
-        currentState = _initialState;
-        endState = _endState;
+        InitCollections();
+
+        initialState = _initialState;
+        endStates = _endState;
+
+        Restart();
     }
+
+    private void InitCollections()
+    {
+        Transitions = new Dictionary<T, HashSet<Transition<T>>>();
+        Actions = new Dictionary<T, Action>();
+        AnyStateTransitions = new HashSet<Transition<T>>();
+        endStates = new HashSet<T>();
+    }
+
+    public void Restart() => currentState = initialState;
 
     public void AddTransition(T startState, T nextState, Condition condition, Action onTransitionChanged)
     {
-        if (!Transitions.TryGetValue(startState, out List<Transition<T>> stateTransition))
+        Transition<T> transition = new Transition<T>(startState, nextState, condition, onTransitionChanged);
+        AddTransition(transition);
+    }
+
+    public void AddTransition(Transition<T> transition)
+    {
+        if (!Transitions.TryGetValue(transition.StartState, out HashSet<Transition<T>> stateTransition))
         {
-            stateTransition = new List<Transition<T>>();
-            Transitions.Add(startState, stateTransition);
+            stateTransition = new HashSet<Transition<T>>();
+            Transitions.Add(transition.StartState, stateTransition);
         }
-        stateTransition.Add(new Transition<T>(startState, nextState, condition, onTransitionChanged));
+        stateTransition.Add(transition);
     }
 
     public void RemoveTransition(Transition<T> transition)
     {
-        if (Transitions.TryGetValue(transition.StartState, out List<Transition<T>> stateTransition))
+        if (Transitions.TryGetValue(transition.StartState, out HashSet<Transition<T>> stateTransition))
             stateTransition.Remove(transition);
+    }
+
+    public void AddAnyStateTransition(T nextState, Condition condition, Action onTransitionChanged)
+    {
+        Transition<T> transition = new Transition<T>(default, nextState, condition, onTransitionChanged);
+        AnyStateTransitions.Add(transition);
     }
 
     public void AddAction(T state, Action _action)
@@ -53,29 +86,46 @@ public class StateMachine<T> where T : Enum
 
     public void Update()
     {
-        InvokeAction();
-        UpdateTransition();
+        if (!EndState)
+        {
+            InvokeAction();
+            UpdateTransitions();
+        }
+        else if (looping)
+        {
+            Restart();
+        }
     }
 
-    public void InvokeAction()
-    {
-        Actions[currentState]?.Invoke();
-    }
+    public void InvokeAction() => Actions[currentState]?.Invoke();
 
-    public void UpdateTransition()
+    public void UpdateTransitions()
     {
-        if (Transitions.TryGetValue(currentState, out List<Transition<T>> stateTransition))
+        foreach (var transition in AnyStateTransitions)
+        {
+            if (CheckTransition(transition))
+                return;
+        }
+
+        if (Transitions.TryGetValue(currentState, out HashSet<Transition<T>> stateTransition))
         {
             foreach (var transition in stateTransition)
             {
-                if (transition.TransitionCondition != null && transition.TransitionCondition.Invoke())
-                {
-                    currentState = transition.NextState;
-                    transition.OnTransitionChanged?.Invoke();
+                if (CheckTransition(transition))
                     return;
-                }
             }
         }
+    }
+
+    private bool CheckTransition(Transition<T> transition)
+    {
+        bool transitionCondition = TransitionCondition(transition);
+        if (transitionCondition)
+        {
+            currentState = transition.NextState;
+            transition.OnTransitionChanged?.Invoke();
+        }
+        return transitionCondition;
     }
 }
 
